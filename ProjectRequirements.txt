@@ -1,0 +1,110 @@
+Project Requirements: Retail Analytics Copilot
+1. Project Overview
+Build a local, free, hybrid AI agent using DSPy and LangGraph to answer retail analytics questions. The agent must intelligently switch between or combine:
+RAG (Retrieval Augmented Generation) over local Markdown documents.
+SQL Generation over a local SQLite database (Northwind).
+Core Constraint: No paid APIs or external network calls at inference. All processing must be local.
+2. Technical Stack & Environment
+Language: Python
+LLM Orchestration: LangGraph (Stateful graph architecture).
+Prompt Optimization: DSPy (Required for at least one module).
+Database: SQLite.
+Local LLM: Phi-3.5-mini-instruct (via Ollama or llama.cpp).
+Hardware Target: CPU compatible, 16GB RAM.
+3. Data & Schema Specifications
+3.1. Structured Data (SQL)
+Source: data/northwind.sqlite
+Required Views: Create lowercase compatibility views to simplify SQL generation:
+CREATE VIEW IF NOT EXISTS orders AS SELECT * FROM Orders;
+CREATE VIEW IF NOT EXISTS order_items AS SELECT * FROM "Order Details";
+CREATE VIEW IF NOT EXISTS products AS SELECT * FROM Products;
+CREATE VIEW IF NOT EXISTS customers AS SELECT * FROM Customers;
+
+
+
+Key Tables & Columns:
+Orders: OrderID, CustomerID, EmployeeID, OrderDate.
+"Order Details" (or order_items): OrderID, ProductID, UnitPrice, Quantity, Discount.
+Products: ProductID, ProductName, SupplierID, CategoryID, UnitPrice.
+Customers: CustomerID, CompanyName, Country.
+3.2. Unstructured Data (RAG Corpus)
+Create the following 4 files in docs/:
+marketing_calendar.md
+Summer Beverages 1997: 1997-06-01 to 1997-06-30. Focus: Beverages, Condiments.
+Winter Classics 1997: 1997-12-01 to 1997-12-31. Focus: Dairy, Confections.
+kpi_definitions.md
+AOV: SUM(UnitPrice * Quantity * (1 - Discount)) / COUNT(DISTINCT OrderID).
+Gross Margin: (Revenue - Cost) / Revenue.
+Revenue: SUM(UnitPrice * Quantity * (1 - Discount)).
+catalog.md
+Maps Products to Categories (Beverages, Condiments, Confections, Dairy Products, Grains/Cereals, Meat/Poultry, Produce, Seafood).
+product_policy.md
+Perishables (Produce, Seafood, Dairy): Return window 3-7 days.
+Beverages: Unopened 14 days; Opened 0 days.
+Non-perishables: 30 days.
+3.3. Business Logic Assumptions
+Missing Cost Data: If CostOfGoods is not in the DB, assume CostOfGoods ≈ 0.7 * UnitPrice.
+Float Tolerance: Evaluation allows ±0.01 tolerance.
+4. Agent Architecture (LangGraph)
+The graph must contain at least the following nodes:
+Router: Decides rag | sql | hybrid. (Encouraged to be a DSPy classifier).
+Retriever: Fetches top-k chunks from docs/. Returns content + Chunk IDs.
+Planner: Extracts constraints (Date ranges from calendar, KPI formulas, Category names).
+NL SQL (DSPy): Generates SQLite queries. Must inspect schema (PRAGMA).
+Executor: Runs SQL. Captures results or errors.
+Synthesizer (DSPy): Generates the final typed answer with citations.
+Repair Loop: REQUIRED. If SQL errors or output format is invalid, revise up to 2 times.
+Checkpointer: Maintain state/event log.
+5. DSPy Optimization Requirement
+Mandate: You must use a DSPy optimizer (MIPROv2, BootstrapFewShot, etc.) on at least one module.
+Candidates: Router (Accuracy), NL SQL (Valid SQL rate), or Synthesizer (Format adherence).
+Deliverable: Report a Before vs. After metric on a small train split (20-40 examples).
+6. Interface & Output Contract
+6.1. CLI Entry Point
+python run_agent_hybrid.py --batch sample_questions_hybrid_eval.jsonl --out outputs_hybrid.jsonl
+
+
+
+6.2. Input Format (sample_questions_hybrid_eval.jsonl)
+{
+  "id": "unique_id",
+  "question": "Natural language query",
+  "format_hint": "int | float | list[{key:type}] | {key:type}"
+}
+
+
+
+6.3. Output Format (outputs_hybrid.jsonl)
+Each line must strictly adhere to this JSON structure:
+{
+  "id": "...",
+  "final_answer": <Matches format_hint exactly>,
+  "sql": "<Last executed SQL query OR empty string>",
+  "confidence": <float 0.0 to 1.0>,
+  "explanation": "<Short explanation, <=2 sentences>",
+  "citations": [
+    "Orders",                // DB Table used
+    "marketing_calendar::chunk0" // Doc Chunk ID used
+  ]
+}
+
+
+
+7. Folder Structure
+your_project/
+├── agent/
+│   ├── graph_hybrid.py       # LangGraph definition
+│   ├── dspy_signatures.py    # DSPy Modules & Signatures
+│   ├── rag/
+│   │   └── retrieval.py      # TF-IDF/BM25 implementation
+│   └── tools/
+│       └── sqlite_tool.py    # DB introspection & execution
+├── data/
+│   └── northwind.sqlite
+├── docs/                     # The 4 markdown files
+├── sample_questions_hybrid_eval.jsonl
+├── run_agent_hybrid.py       # Main CLI entrypoint
+└── requirements.txt
+
+
+
