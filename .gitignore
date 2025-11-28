@@ -19,7 +19,6 @@ pip-delete-this-directory.txt
 
 # Project Data & Outputs
 data/northwind.sqlite
-outputs_hybrid.jsonl
 *.log
 
 # OS
