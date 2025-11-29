@@ -45,8 +45,19 @@ class AgentNodes:
 
     def node_router(self, state: AgentState):
         print(f"--- Router: Analyzing '{state['question']}' ---")
-        prediction = self.router(question=state['question'])
-        decision = prediction.decision.lower().strip()
+        try:
+            prediction = self.router(question=state['question'])
+            decision = prediction.decision.lower().strip()
+        except Exception as e:
+            print(f"Router Error: {e}")
+            # Fallback: Try to parse manually from error or default to hybrid
+            decision = "hybrid"
+            error_str = str(e).lower()
+            if "decition" in error_str or "decision" in error_str:
+                 import re
+                 match = re.search(r'"deci[st]ion"\s*:\s*"(\w+)"', error_str)
+                 if match:
+                     decision = match.group(1).lower()
         
         # Normalize decision
         if 'sql' in decision: decision = 'sql'
